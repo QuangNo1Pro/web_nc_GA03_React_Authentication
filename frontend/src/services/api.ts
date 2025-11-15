@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { getAccessToken, setAccessToken } from './token';
 
@@ -18,7 +17,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 api.interceptors.response.use(
@@ -29,10 +28,18 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-        const { accessToken } = response.data;
-        setAccessToken(accessToken);
-        api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${refreshToken}`,
+            },
+          },
+        );
+        const { access_token } = response.data;
+        setAccessToken(access_token);
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
         return api(originalRequest);
       } catch (refreshError) {
         // Handle refresh token failure (e.g., redirect to login)
@@ -42,6 +49,5 @@ api.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
-
