@@ -34,7 +34,7 @@ export default function Login() {
     const refreshToken = urlParams.get('refresh_token');
 
     if (accessToken && refreshToken) {
-      console.log('Login.tsx: Tokens found in URL. Calling login function.');
+      console.log('Login.tsx: Current URL before processing tokens:', window.location.href);
       login({ access_token: accessToken, refresh_token: refreshToken });
       console.log('Login.tsx: Navigating to /inbox.');
       navigate('/inbox', { replace: true });
@@ -43,7 +43,7 @@ export default function Login() {
       urlParams.delete('refresh_token');
       const newUrl = `${window.location.pathname}`;
       window.history.replaceState({}, document.title, newUrl);
-      console.log('Login.tsx: URL after clearing tokens:', window.location.href);
+      console.log('Login.tsx: URL after clearing tokens and navigation:', window.location.href);
     }
   }, [login, navigate]);
 
@@ -126,9 +126,9 @@ export default function Login() {
               <button
                 type="submit"
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                disabled={mutation.isLoading}
+                disabled={mutation.isPending}
               >
-                {mutation.isLoading ? 'Signing in...' : 'Sign in'}
+                {mutation.isPending ? 'Signing in...' : 'Sign in'}
               </button>
             </div>
           </form>
