@@ -34,12 +34,16 @@ export default function Login() {
     const refreshToken = urlParams.get('refresh_token');
 
     if (accessToken && refreshToken) {
+      console.log('Login.tsx: Tokens found in URL. Calling login function.');
       login({ access_token: accessToken, refresh_token: refreshToken });
+      console.log('Login.tsx: Navigating to /inbox.');
       navigate('/inbox', { replace: true });
       // Clear tokens from URL
       urlParams.delete('access_token');
       urlParams.delete('refresh_token');
-      window.history.replaceState({}, document.title, `${window.location.pathname}`);
+      const newUrl = `${window.location.pathname}`;
+      window.history.replaceState({}, document.title, newUrl);
+      console.log('Login.tsx: URL after clearing tokens:', window.location.href);
     }
   }, [login, navigate]);
 
