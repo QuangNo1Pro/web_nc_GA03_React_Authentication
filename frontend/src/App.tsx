@@ -10,7 +10,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './auth/auth';
 
 export default function App() {
-  const { tokens, logout } = useAuth();
+  const { tokens, logout, loading } = useAuth();
   const queryClient = useQueryClient();
   const handleLogout = () => {
     logout();
@@ -18,6 +18,14 @@ export default function App() {
   };
 
   const isAuthenticated = !!tokens.access_token;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg font-semibold">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-white via-slate-50 to-slate-100">
