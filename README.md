@@ -92,6 +92,6 @@
 
 Ứng dụng đã được triển khai và có thể truy cập công khai tại các URL sau:
 
-* **Backend (Render):**[ ]
-* **Check database Backend (Vercel):**[]
-* **Frontend (Vercel):**[]
+* **Backend (Render):**[ https://web-nc-ga03-react-authentication.onrender.com]
+* **Check database Backend (Vercel):**[https://web-nc-ga03-react-authentication.onrender.com/db]
+* **Frontend (Vercel):**[https://web-nc-ga-03-react-authentication.vercel.app/]
