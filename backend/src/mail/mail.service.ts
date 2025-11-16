@@ -1,10 +1,11 @@
+
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class MailService {
   private readonly mailboxes = [
-    { id: 'inbox', name: 'Inbox', unread: 3 },
-    { id: 'starred', name: 'Starred', unread: 0 },
+    { id: 'inbox', name: 'Inbox', unread: 7 },
+    { id: 'starred', name: 'Starred', unread: 4, count: 4 }, // count = tổng số email starred, unread = số email starred chưa đọc
     { id: 'sent', name: 'Sent', unread: 0 },
     { id: 'drafts', name: 'Drafts', unread: 1 },
     { id: 'archive', name: 'Archive', unread: 0 },
@@ -22,7 +23,7 @@ export class MailService {
         subject: 'Hello World',
         preview: 'This is a test email',
         timestamp: '2025-11-15T10:00:00Z',
-        starred: false,
+        starred: true,
         read: false,
       },
       {
@@ -43,6 +44,60 @@ export class MailService {
         starred: false,
         read: true,
       },
+      {
+        id: '5',
+        sender: 'Boss',
+        subject: 'Urgent: Meeting',
+        preview: 'Please join the meeting at 2PM',
+        timestamp: '2025-11-15T13:00:00Z',
+        starred: true,
+        read: false,
+      },
+      {
+        id: '6',
+        sender: 'HR',
+        subject: 'Policy Update',
+        preview: 'Please review the new HR policy',
+        timestamp: '2025-11-15T14:00:00Z',
+        starred: false,
+        read: false,
+      },
+      {
+        id: '7',
+        sender: 'Marketing Team',
+        subject: 'Q4 Campaign Results',
+        preview: 'Our campaign exceeded expectations with a 25% increase in engagement',
+        timestamp: '2025-11-15T15:00:00Z',
+        starred: false,
+        read: false,
+      },
+      {
+        id: '8',
+        sender: 'IT Support',
+        subject: 'System Maintenance Scheduled',
+        preview: 'System maintenance is scheduled for this Saturday from 10 PM to 2 AM',
+        timestamp: '2025-11-15T16:00:00Z',
+        starred: false,
+        read: false,
+      },
+      {
+        id: '9',
+        sender: 'Finance Team',
+        subject: 'Expense Report Approval',
+        preview: 'Your expense report for November has been approved',
+        timestamp: '2025-11-15T17:00:00Z',
+        starred: false,
+        read: true,
+      },
+      {
+        id: '10',
+        sender: 'Customer Success',
+        subject: 'Client Feedback Summary',
+        preview: 'Overall satisfaction rate: 92%. Great job on the recent project delivery!',
+        timestamp: '2025-11-15T18:00:00Z',
+        starred: false,
+        read: false,
+      },
     ],
     sent: [
       {
@@ -51,11 +106,107 @@ export class MailService {
         subject: 'Test Email',
         preview: 'This is a test email I sent',
         timestamp: '2025-11-15T09:00:00Z',
-        starred: false,
+        starred: true,
         read: true,
       },
     ],
-  };
+      spam: [],
+      drafts: [],
+      archive: [],
+      trash: [],
+    };
+
+    // Thêm phương thức mock cập nhật trạng thái starred cho email
+    setEmailStarred(emailId: string, starred: boolean) {
+      // Tìm email trong từng mailbox gốc (để cập nhật đúng reference)
+      let email: any = null;
+      const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'archive', 'trash'];
+      
+      for (const key of mailboxKeys) {
+        const found = this.emails[key]?.find(e => e.id === emailId);
+        if (found) {
+          email = found;
+          break;
+        }
+      }
+      
+      if (email) {
+        email.starred = starred;
+        
+        // Cập nhật số lượng starred trong mailbox
+        const starredBox = this.mailboxes.find(mb => mb.id === 'starred');
+        if (starredBox) {
+          // Cập nhật count (tổng số email starred, bất kể đã đọc hay chưa)
+          if (starred) {
+            starredBox.count = (starredBox.count || 0) + 1;
+          } else if ((starredBox.count || 0) > 0) {
+            starredBox.count = (starredBox.count || 0) - 1;
+          }
+          
+          // Cập nhật unread count (chỉ tính email chưa đọc)
+          if (starred && !email.read) {
+            starredBox.unread += 1;
+          } else if (!starred && !email.read && starredBox.unread > 0) {
+            starredBox.unread -= 1;
+          }
+        }
+        return { success: true, email };
+      }
+      return { success: false };
+    }
+
+    setEmailRead(emailId: string, read: boolean) {
+      // Tìm email trong từng mailbox gốc (để cập nhật đúng reference)
+      let email: any = null;
+      const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'archive', 'trash'];
+      
+      for (const key of mailboxKeys) {
+        const found = this.emails[key]?.find(e => e.id === emailId);
+        if (found) {
+          email = found;
+          break;
+        }
+      }
+      
+      if (email) {
+        const wasUnread = !email.read; // Trạng thái cũ
+        
+        // Nếu email thuộc inbox, cập nhật số lượng unread
+        const inboxBox = this.mailboxes.find(mb => mb.id === 'inbox');
+        const inboxEmail = (this.emails.inbox || []).find(e => e.id === emailId);
+        if (inboxEmail && inboxBox) {
+          if (wasUnread && read) {
+            // Từ chưa đọc → đã đọc: -1
+            if (inboxBox.unread > 0) {
+              inboxBox.unread -= 1;
+            }
+          } else if (!wasUnread && !read) {
+            // Từ đã đọc → chưa đọc: +1
+            inboxBox.unread += 1;
+          }
+        }
+        
+        // Cập nhật starredBox.unread nếu email có starred
+        if (email.starred) {
+          const starredBox = this.mailboxes.find(mb => mb.id === 'starred');
+          if (starredBox) {
+            if (wasUnread && read) {
+              // Từ chưa đọc → đã đọc: -1
+              if (starredBox.unread > 0) {
+                starredBox.unread -= 1;
+              }
+            } else if (!wasUnread && !read) {
+              // Từ đã đọc → chưa đọc: +1
+              starredBox.unread += 1;
+            }
+          }
+        }
+        
+        email.read = read;
+        return { success: true, email };
+      }
+      return { success: false };
+    }
 
   private readonly emailDetails: { [key: string]: any } = {
     '1': {
@@ -97,6 +248,70 @@ export class MailService {
       body: '<p>This is a test email I sent.</p>',
       attachments: [],
     },
+    '5': {
+      from: 'Boss <boss@company.com>',
+      to: 'Me <me@example.com>',
+      cc: '',
+      subject: 'Urgent: Meeting',
+      received: '2025-11-15T13:00:00Z',
+      body: '<p>Please join the meeting at 2PM today. We need to discuss the project timeline.</p>',
+      attachments: [
+        { name: 'meeting-agenda.pdf', size: '500 KB' },
+      ],
+    },
+    '6': {
+      from: 'HR <hr@company.com>',
+      to: 'Me <me@example.com>',
+      cc: '',
+      subject: 'Policy Update',
+      received: '2025-11-15T14:00:00Z',
+      body: '<p>Please review the new HR policy regarding remote work.</p>',
+      attachments: [],
+    },
+    '7': {
+      from: 'Marketing Team <marketing@company.com>',
+      to: 'Me <me@example.com>',
+      cc: 'Boss <boss@company.com>',
+      subject: 'Q4 Campaign Results',
+      received: '2025-11-15T15:00:00Z',
+      body: '<h2>Q4 Results</h2><p>Our campaign exceeded expectations with a 25% increase in engagement.</p>',
+      attachments: [
+        { name: 'q4-report.xlsx', size: '2.5 MB' },
+        { name: 'analytics.pdf', size: '1.8 MB' },
+      ],
+    },
+    '8': {
+      from: 'IT Support <support@company.com>',
+      to: 'Me <me@example.com>',
+      cc: '',
+      subject: 'System Maintenance Scheduled',
+      received: '2025-11-15T16:00:00Z',
+      body: '<p>System maintenance is scheduled for this Saturday from 10 PM to 2 AM. Please save your work.</p>',
+      attachments: [],
+    },
+    '9': {
+      from: 'Finance Team <finance@company.com>',
+      to: 'Me <me@example.com>',
+      cc: 'HR <hr@company.com>',
+      subject: 'Expense Report Approval',
+      received: '2025-11-15T17:00:00Z',
+      body: '<p>Your expense report for November has been approved. Payment will be processed by Friday.</p>',
+      attachments: [
+        { name: 'expense-report-nov.pdf', size: '850 KB' },
+      ],
+    },
+    '10': {
+      from: 'Customer Success <success@company.com>',
+      to: 'Me <me@example.com>',
+      cc: '',
+      subject: 'Client Feedback Summary',
+      received: '2025-11-15T18:00:00Z',
+      body: '<h3>Client Feedback</h3><p>Overall satisfaction rate: 92%. Great job on the recent project delivery!</p>',
+      attachments: [
+        { name: 'feedback-summary.pdf', size: '1.1 MB' },
+        { name: 'survey-results.xlsx', size: '780 KB' },
+      ],
+    },
   };
 
   getMailboxes() {
@@ -104,10 +319,138 @@ export class MailService {
   }
 
   getEmails(mailboxId: string, page: number) {
-    return this.emails[mailboxId] || [];
+    let emails: any[] = [];
+    
+    if (mailboxId === 'starred') {
+      // Lấy tất cả email có starred=true từ mọi mailbox
+      const allEmails = [
+        ...(this.emails.inbox || []),
+        ...(this.emails.sent || []),
+        ...(this.emails.spam || []),
+        ...(this.emails.drafts || []),
+        ...(this.emails.archive || []),
+        ...(this.emails.trash || []),
+      ];
+      emails = allEmails.filter(e => e.starred);
+    } else {
+      emails = this.emails[mailboxId] || [];
+    }
+    
+    // Return with pagination info (for frontend virtualization)
+    return {
+      emails,
+      total: emails.length,
+      page: page || 1,
+      pageSize: 50, // Số email mỗi trang (không dùng trong virtualized list nhưng giữ cho tương lai)
+    };
   }
 
   getEmail(emailId: string) {
+    // Tìm email trong inbox
+    const inboxEmail = (this.emails.inbox || []).find(e => e.id === emailId);
+    if (inboxEmail && !inboxEmail.read) {
+      inboxEmail.read = true;
+      // Giảm số lượng unread của mailbox inbox
+      const inboxBox = this.mailboxes.find(mb => mb.id === 'inbox');
+      if (inboxBox && inboxBox.unread > 0) {
+        inboxBox.unread -= 1;
+      }
+    }
     return this.emailDetails[emailId] || null;
+  }
+
+  // Bulk delete emails
+  deleteEmails(ids: string[]) {
+    const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'archive', 'trash'];
+    let deletedCount = 0;
+
+    for (const key of mailboxKeys) {
+      if (this.emails[key]) {
+        const initialLength = this.emails[key].length;
+        this.emails[key] = this.emails[key].filter(e => !ids.includes(e.id));
+        deletedCount += initialLength - this.emails[key].length;
+      }
+    }
+
+    // Cập nhật counts
+    this.recalculateCounts();
+    return { success: true, deletedCount };
+  }
+
+  // Bulk mark read/unread
+  bulkSetRead(ids: string[], read: boolean) {
+    const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'archive', 'trash'];
+    let updatedCount = 0;
+
+    for (const key of mailboxKeys) {
+      if (this.emails[key]) {
+        this.emails[key].forEach(email => {
+          if (ids.includes(email.id)) {
+            email.read = read;
+            updatedCount++;
+          }
+        });
+      }
+    }
+
+    // Cập nhật counts
+    this.recalculateCounts();
+    return { success: true, updatedCount };
+  }
+
+  // Send email
+  sendEmail(emailData: { to: string; subject: string; body: string }) {
+    const newEmail = {
+      id: String(Date.now()),
+      sender: 'Me',
+      subject: emailData.subject,
+      preview: emailData.body.substring(0, 50),
+      timestamp: new Date().toISOString(),
+      starred: false,
+      read: true,
+    };
+
+    // Thêm vào sent
+    if (!this.emails.sent) {
+      this.emails.sent = [];
+    }
+    this.emails.sent.unshift(newEmail);
+
+    // Thêm email detail
+    this.emailDetails[newEmail.id] = {
+      from: 'Me <me@example.com>',
+      to: emailData.to,
+      cc: '',
+      subject: emailData.subject,
+      received: newEmail.timestamp,
+      body: emailData.body,
+      attachments: [],
+    };
+
+    return { success: true, email: newEmail };
+  }
+
+  // Helper: recalculate unread counts
+  private recalculateCounts() {
+    const inboxBox = this.mailboxes.find(mb => mb.id === 'inbox');
+    const starredBox = this.mailboxes.find(mb => mb.id === 'starred');
+
+    if (inboxBox) {
+      inboxBox.unread = (this.emails.inbox || []).filter(e => !e.read).length;
+    }
+
+    if (starredBox) {
+      const allEmails = [
+        ...(this.emails.inbox || []),
+        ...(this.emails.sent || []),
+        ...(this.emails.spam || []),
+        ...(this.emails.drafts || []),
+        ...(this.emails.archive || []),
+        ...(this.emails.trash || []),
+      ];
+      const starredEmails = allEmails.filter(e => e.starred);
+      starredBox.count = starredEmails.length;
+      starredBox.unread = starredEmails.filter(e => !e.read).length;
+    }
   }
 }
