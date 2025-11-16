@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ReactWindow from 'react-window';
 import { api } from '../services/api';
+import './Inbox.css';
 
 const FixedSizeList = (ReactWindow as any).FixedSizeList;
 import {
@@ -53,6 +54,7 @@ const EmailRow = ({ index, style, data }: any) => {
     selectedMailbox,
     selectedEmails,
     starredState,
+    focusedEmailIndex,
     handleToggleCheckbox,
     handleEmailSelect,
     handleToggleRead,
@@ -62,12 +64,17 @@ const EmailRow = ({ index, style, data }: any) => {
   const email = emails[index];
   if (!email) return null;
 
+  const isFocused = index === focusedEmailIndex;
+
   return (
     <div
       style={style}
+      role="button"
+      tabIndex={isFocused ? 0 : -1}
+      aria-label={`Email from ${email.sender}: ${email.subject}`}
       className={`flex items-start p-3 cursor-pointer hover:bg-gray-100 border-b ${
         selectedEmail === email.id ? 'bg-blue-50' : ''
-      } ${!email.read && selectedMailbox !== 'sent' && selectedMailbox !== 'trash' && selectedMailbox !== 'starred' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
+      } ${isFocused ? 'ring-2 ring-blue-400' : ''} ${!email.read && selectedMailbox !== 'sent' && selectedMailbox !== 'trash' && selectedMailbox !== 'starred' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
     >
       {/* Checkbox */}
       <input
@@ -85,12 +92,12 @@ const EmailRow = ({ index, style, data }: any) => {
       </div>
       <div className="flex-grow" onClick={() => handleEmailSelect(email.id)}>
         {/* Hàng đầu tiên: tên người gửi */}
-        <div className="flex justify-between items-center">
-          <span className="font-semibold text-base">{email.sender}</span>
+        <div className="flex justify-between items-center mb-1">
+          <span className="email-sender">{email.sender}</span>
           <span className="flex items-center gap-2">
             {/* Nút đánh dấu đã đọc/chưa đọc */}
             <span
-              className="cursor-pointer"
+              className="cursor-pointer hover:opacity-75 transition-opacity"
               title={email.read ? 'Đánh dấu chưa đọc' : 'Đánh dấu đã đọc'}
               onClick={e => {
                 e.stopPropagation();
@@ -98,33 +105,33 @@ const EmailRow = ({ index, style, data }: any) => {
               }}
             >
               {email.read ? (
-                <MdMarkEmailRead size={22} color="#3b82f6" />
+                <MdMarkEmailRead size={20} color="#3b82f6" />
               ) : (
-                <MdMarkEmailUnread size={22} color="#e5e7eb" />
+                <MdMarkEmailUnread size={20} color="#9CA3AF" />
               )}
             </span>
             {/* Icon sao */}
             <span
-              className="cursor-pointer"
-              title={starredState[email.id] ? 'Unstar' : 'Star'}
+              className="cursor-pointer hover:opacity-75 transition-opacity"
+              title={starredState[email.id] ? 'Bỏ gắn sao' : 'Gắn sao'}
               onClick={e => {
                 e.stopPropagation();
                 handleToggleStar(email.id);
               }}
             >
-              <FiStar color={starredState[email.id] ? 'gold' : '#e5e7eb'} fill={starredState[email.id] ? 'gold' : '#e5e7eb'} />
+              <FiStar color={starredState[email.id] ? '#FBBF24' : '#D1D5DB'} fill={starredState[email.id] ? '#FBBF24' : 'none'} size={18} />
             </span>
           </span>
         </div>
         {/* Hàng thứ hai: subject */}
-        <div className="flex justify-between items-center">
-          <span className="font-semibold text-base">{email.subject}</span>
-          <span className="text-xs text-gray-500 ml-2">
-            {new Date(email.timestamp).toLocaleTimeString()}
+        <div className="flex justify-between items-center mb-1">
+          <span className="email-subject truncate mr-4">{email.subject}</span>
+          <span className="email-timestamp flex-shrink-0">
+            {new Date(email.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
         {/* Hàng thứ ba: preview */}
-        <div className="text-sm text-gray-500 truncate">{email.preview}</div>
+        <div className="email-preview truncate">{email.preview}</div>
       </div>
     </div>
   );
@@ -134,16 +141,26 @@ export default function Inbox() {
   const queryClient = useQueryClient();
   const [selectedMailbox, setSelectedMailbox] = useState('inbox');
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-  const [mobileView, setMobileView] = useState('mailboxes'); // mailboxes, emails, email
+  const [mobileView, setMobileView] = useState('emails'); // emails or email (default: emails)
   const [starredState, setStarredState] = useState<{ [id: string]: boolean }>({});
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [mailboxWidth, setMailboxWidth] = useState(20); // % width
   const [emailListWidth, setEmailListWidth] = useState(40); // % width
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [composeTo, setComposeTo] = useState('');
+  const [composeCc, setComposeCc] = useState('');
+  const [composeBcc, setComposeBcc] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
+  const [composeAttachments, setComposeAttachments] = useState<File[]>([]);
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [focusedEmailIndex, setFocusedEmailIndex] = useState(0);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [showMailboxMenu, setShowMailboxMenu] = useState(false);
+  const emailListRef = useRef<HTMLDivElement>(null);
+  const [listHeight, setListHeight] = useState(500);
 
   const {
     data: mailboxes,
@@ -188,7 +205,97 @@ export default function Inbox() {
     setMobileView('emails');
     setStarredState({}); // reset starred state when switching mailbox
     setSelectedEmails(new Set()); // reset selected emails when switching mailbox
+    setFocusedEmailIndex(0); // reset focus to first email
   };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!emails || emails.length === 0) return;
+      
+      const filteredEmails = emails.filter((email: any) => {
+        if (selectedMailbox === 'starred') return starredState[email.id];
+        return true;
+      });
+      
+      if (filteredEmails.length === 0) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setFocusedEmailIndex(prev => Math.min(prev + 1, filteredEmails.length - 1));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setFocusedEmailIndex(prev => Math.max(prev - 1, 0));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (filteredEmails[focusedEmailIndex]) {
+            handleEmailSelect(filteredEmails[focusedEmailIndex].id);
+          }
+          break;
+        case 'r':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            handleRefresh();
+          }
+          break;
+        case 'c':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            setShowComposeModal(true);
+          }
+          break;
+        case 's':
+          if ((e.ctrlKey || e.metaKey) && selectedEmail) {
+            e.preventDefault();
+            handleToggleStar(selectedEmail);
+          }
+          break;
+        case 'u':
+          if ((e.ctrlKey || e.metaKey) && selectedEmail) {
+            e.preventDefault();
+            handleToggleRead(selectedEmail);
+          }
+          break;
+        case 'Escape':
+          if (showComposeModal) {
+            setShowComposeModal(false);
+          } else if (showKeyboardHelp) {
+            setShowKeyboardHelp(false);
+          } else if (showMailboxMenu) {
+            setShowMailboxMenu(false);
+          } else if (selectedEmail) {
+            setSelectedEmail(null);
+            setMobileView('emails');
+          }
+          break;
+        case '?':
+          if (e.shiftKey) {
+            e.preventDefault();
+            setShowKeyboardHelp(true);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [emails, selectedMailbox, starredState, focusedEmailIndex, selectedEmail, showComposeModal]);
+
+  // Update list height when container size changes
+  useEffect(() => {
+    const updateHeight = () => {
+      if (emailListRef.current) {
+        setListHeight(emailListRef.current.clientHeight);
+      }
+    };
+    
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   // Khi fetch emails, cập nhật trạng thái starred từ dữ liệu backend
   useEffect(() => {
@@ -436,14 +543,22 @@ export default function Inbox() {
     try {
       await api.post('/mail/send', {
         to: composeTo,
+        cc: composeCc,
+        bcc: composeBcc,
         subject: composeSubject,
-        body: composeBody
+        body: composeBody,
+        attachments: composeAttachments.map(f => f.name) // Chỉ gửi tên file (demo)
       });
       
       // Reset form và đóng modal
       setComposeTo('');
+      setComposeCc('');
+      setComposeBcc('');
       setComposeSubject('');
       setComposeBody('');
+      setComposeAttachments([]);
+      setShowCc(false);
+      setShowBcc(false);
       setShowComposeModal(false);
       
       // Refresh sent mailbox
@@ -456,7 +571,7 @@ export default function Inbox() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-65px)] bg-white">
+    <div className="inbox-container flex flex-col h-[calc(100vh-65px)] bg-white">
       {/* Action Bar - ngang hàng với navbar, ở trên cùng */}
       <div className="border-b bg-white">
         {/* Hàng 1: Action buttons */}
@@ -513,8 +628,19 @@ export default function Inbox() {
             <MdMarkEmailUnread size={18} className="text-gray-600" />
           </button>
           
+          <div className="flex-1" />
+          
+          {/* Keyboard shortcuts help */}
+          <button
+            className="p-2 hover:bg-gray-200 rounded text-gray-600 text-sm"
+            onClick={() => setShowKeyboardHelp(true)}
+            title="Keyboard shortcuts (Shift + ?)"
+          >
+            <span className="font-semibold">?</span>
+          </button>
+          
           {selectedEmails.size > 0 && (
-            <span className="ml-auto text-sm text-gray-600">
+            <span className="text-sm text-gray-600">
               {selectedEmails.size} đã chọn
             </span>
           )}
@@ -523,17 +649,16 @@ export default function Inbox() {
 
       {/* Main content: 3 columns */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Column 1: Mailboxes */}
+        {/* Column 1: Mailboxes - Always hidden on mobile, show on desktop */}
         <div
-          className={`bg-gray-50 p-4 overflow-y-auto border-r ${
-            mobileView !== 'mailboxes' && 'hidden md:block'
-          }`}
+          className="hidden md:flex md:flex-col bg-gray-50 overflow-hidden border-r"
           style={{ width: `${mailboxWidth}%` }}
         >
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center p-4 flex-shrink-0">
           <h2 className="text-lg font-semibold">Mailboxes</h2>
           <FiEdit className="cursor-pointer" />
         </div>
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
         {mailboxesLoading ? (
           <div className="center-spinner">
             <div className="spinner"></div>
@@ -545,10 +670,20 @@ export default function Inbox() {
             {mailboxes?.map((mailbox: any) => (
               <li
                 key={mailbox.id}
-                className={`flex items-center p-2 rounded cursor-pointer hover:bg-gray-200 ${
+                role="button"
+                tabIndex={0}
+                aria-label={`${mailbox.name} mailbox${mailbox.unread > 0 ? `, ${mailbox.unread} unread` : ''}`}
+                aria-current={selectedMailbox === mailbox.id ? 'page' : undefined}
+                className={`flex items-center p-2 rounded cursor-pointer hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                   selectedMailbox === mailbox.id ? 'bg-blue-100 text-blue-600' : ''
                 }`}
                 onClick={() => handleMailboxSelect(mailbox.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleMailboxSelect(mailbox.id);
+                  }
+                }}
               >
                 <span className="mr-2">{mailboxIcons[mailbox.id as keyof typeof mailboxIcons]}</span>
                 <span>{mailbox.name}</span>
@@ -567,6 +702,7 @@ export default function Inbox() {
             ))}
           </ul>
         )}
+        </div>
       </div>
 
       {/* Divider 1 */}
@@ -575,24 +711,66 @@ export default function Inbox() {
         onMouseDown={handleMouseDown(1)}
       />
 
-      {/* Column 2: Email List */}
+      {/* Column 2: Email List - Show by default on mobile, hide when email is selected */}
       <div
-        className={`border-r p-4 overflow-y-auto ${
-          mobileView !== 'emails' && 'hidden md:block'
+        className={`border-r flex flex-col w-full ${
+          mobileView === 'email' ? 'hidden md:flex' : 'flex'
         }`}
-        style={{ width: `${emailListWidth}%` }}
+        style={{ width: window.innerWidth >= 768 ? `${emailListWidth}%` : undefined }}
       >
         {/* Header đơn giản - chỉ title và select all */}
-        <div className="border-b">
+        <div className="border-b flex-shrink-0">
           {/* Title */}
           <div className="flex justify-between items-center px-4 py-2">
-            <button
-              className="md:hidden text-blue-500"
-              onClick={() => setMobileView('mailboxes')}
-            >
-              ← Back
-            </button>
-            <h2 className="text-lg font-semibold">
+            {/* Mobile: Mailbox dropdown menu */}
+            <div className="md:hidden relative">
+              <button
+                onClick={() => setShowMailboxMenu(!showMailboxMenu)}
+                className="flex items-center gap-2 text-lg font-semibold hover:text-blue-600"
+              >
+                <span>{selectedMailbox.charAt(0).toUpperCase() + selectedMailbox.slice(1)}</span>
+                <span className="text-sm">▼</span>
+              </button>
+              
+              {showMailboxMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowMailboxMenu(false)}
+                  ></div>
+                  <div className="absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-96 overflow-y-auto">
+                    {mailboxes?.map((mailbox: any) => (
+                      <button
+                        key={mailbox.id}
+                        onClick={() => {
+                          handleMailboxSelect(mailbox.id);
+                          setShowMailboxMenu(false);
+                        }}
+                        className={`w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center gap-3 border-b last:border-b-0 ${
+                          selectedMailbox === mailbox.id ? 'bg-blue-50 text-blue-600' : ''
+                        }`}
+                      >
+                        <span className="text-lg">{mailboxIcons[mailbox.id as keyof typeof mailboxIcons]}</span>
+                        <span className="flex-1">{mailbox.name}</span>
+                        {mailbox.id === 'starred' && (mailbox as any).count > 0 && (
+                          <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-0.5">
+                            {(mailbox as any).count}
+                          </span>
+                        )}
+                        {mailbox.id !== 'starred' && mailbox.unread > 0 && (
+                          <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-0.5">
+                            {mailbox.unread}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            
+            {/* Desktop: Static title */}
+            <h2 className="hidden md:block text-lg font-semibold">
               {selectedMailbox.charAt(0).toUpperCase() + selectedMailbox.slice(1)}
             </h2>
             <div className="flex items-center gap-2">
@@ -616,6 +794,9 @@ export default function Inbox() {
             </span>
           </div>
         </div>
+        
+        {/* Email list content with overflow */}
+        <div ref={emailListRef} className="flex-1">
         {emailsLoading ? (
           <div className="center-spinner">
             <div className="spinner"></div>
@@ -623,9 +804,9 @@ export default function Inbox() {
         ) : emailsError ? (
           <div>Error loading emails</div>
         ) : (
-          <div className="h-[calc(100vh-250px)]">
+          <div className="h-full">
             <FixedSizeList
-              height={window.innerHeight - 250}
+              height={listHeight}
               itemCount={emails?.filter((email: any) => {
                 if (selectedMailbox === 'starred') {
                   return starredState[email.id];
@@ -655,6 +836,7 @@ export default function Inbox() {
             </FixedSizeList>
           </div>
         )}
+        </div>
       </div>
 
       {/* Divider 2 */}
@@ -663,19 +845,26 @@ export default function Inbox() {
         onMouseDown={handleMouseDown(2)}
       />
 
-      {/* Column 3: Email Detail */}
+      {/* Column 3: Email Detail - Show on mobile only when email selected */}
       <div
-        className={`p-4 overflow-y-auto ${
-          mobileView !== 'email' && 'hidden md:block'
+        className={`flex flex-col overflow-hidden w-full ${
+          mobileView === 'emails' ? 'hidden md:flex' : 'flex'
         }`}
-        style={{ width: `${100 - mailboxWidth - emailListWidth}%` }}
+        style={{ width: window.innerWidth >= 768 ? `${100 - mailboxWidth - emailListWidth}%` : undefined }}
       >
+        <div className="flex-shrink-0 p-4 pb-0">
         <button
-          className="md:hidden mb-4"
+          className="md:hidden mb-4 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium px-3 py-2 rounded hover:bg-blue-50"
           onClick={() => setMobileView('emails')}
+          aria-label="Back to email list"
         >
-          &larr; Back
+          <span className="text-xl">←</span>
+          <span>Back to emails</span>
         </button>
+        </div>
+        
+        {/* Email detail content with overflow */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
         {emailLoading ? (
           <div className="center-spinner">
             <div className="spinner"></div>
@@ -825,7 +1014,7 @@ export default function Inbox() {
 
             {/* Email body */}
             <div
-              className="prose max-w-none mb-4"
+              className="email-body prose max-w-none mb-4"
               dangerouslySetInnerHTML={{ __html: email.body }}
             />
 
@@ -865,6 +1054,7 @@ export default function Inbox() {
             Select an email to view details
           </div>
         )}
+        </div>
       </div>
       
       {/* Compose Modal */}
@@ -879,7 +1069,13 @@ export default function Inbox() {
             </div>
             <div className="p-4">
               <div className="mb-3">
-                <label className="block text-sm font-medium mb-1">Tới:</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium">Tới:</label>
+                  <div className="flex gap-2 text-xs">
+                    {!showCc && <button onClick={() => setShowCc(true)} className="text-blue-500 hover:underline">Cc</button>}
+                    {!showBcc && <button onClick={() => setShowBcc(true)} className="text-blue-500 hover:underline">Bcc</button>}
+                  </div>
+                </div>
                 <input 
                   type="email" 
                   className="w-full border rounded px-3 py-2" 
@@ -888,6 +1084,33 @@ export default function Inbox() {
                   onChange={(e) => setComposeTo(e.target.value)}
                 />
               </div>
+              
+              {showCc && (
+                <div className="mb-3">
+                  <label className="block text-sm font-medium mb-1">Cc:</label>
+                  <input 
+                    type="email" 
+                    className="w-full border rounded px-3 py-2" 
+                    placeholder="email@example.com"
+                    value={composeCc}
+                    onChange={(e) => setComposeCc(e.target.value)}
+                  />
+                </div>
+              )}
+              
+              {showBcc && (
+                <div className="mb-3">
+                  <label className="block text-sm font-medium mb-1">Bcc:</label>
+                  <input 
+                    type="email" 
+                    className="w-full border rounded px-3 py-2" 
+                    placeholder="email@example.com"
+                    value={composeBcc}
+                    onChange={(e) => setComposeBcc(e.target.value)}
+                  />
+                </div>
+              )}
+              
               <div className="mb-3">
                 <label className="block text-sm font-medium mb-1">Chủ đề:</label>
                 <input 
@@ -898,15 +1121,45 @@ export default function Inbox() {
                   onChange={(e) => setComposeSubject(e.target.value)}
                 />
               </div>
+              
               <div className="mb-3">
                 <label className="block text-sm font-medium mb-1">Nội dung:</label>
                 <textarea 
                   className="w-full border rounded px-3 py-2" 
-                  rows={8} 
+                  rows={6} 
                   placeholder="Nhập nội dung email..."
                   value={composeBody}
                   onChange={(e) => setComposeBody(e.target.value)}
                 ></textarea>
+              </div>
+              
+              <div className="mb-3">
+                <label className="block text-sm font-medium mb-1">Tập đính kèm:</label>
+                <input 
+                  type="file" 
+                  multiple
+                  className="w-full border rounded px-3 py-2"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setComposeAttachments(Array.from(e.target.files));
+                    }
+                  }}
+                />
+                {composeAttachments.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {composeAttachments.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded text-sm">
+                        <span className="truncate">{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                        <button 
+                          onClick={() => setComposeAttachments(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-red-500 hover:text-red-700 ml-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowComposeModal(false)} className="px-4 py-2 border rounded hover:bg-gray-100">
@@ -915,6 +1168,54 @@ export default function Inbox() {
                 <button onClick={handleSendEmail} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
                   Gửi
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Keyboard Shortcuts Help Modal */}
+      {showKeyboardHelp && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowKeyboardHelp(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">Keyboard Shortcuts</h3>
+              <button onClick={() => setShowKeyboardHelp(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Navigate emails</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">↑ / ↓</kbd>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Open email</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Enter</kbd>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Compose new email</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Ctrl + C</kbd>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Refresh</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Ctrl + R</kbd>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Toggle star</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Ctrl + S</kbd>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Toggle read/unread</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Ctrl + U</kbd>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Close / Go back</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Esc</kbd>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-gray-600">Show shortcuts</span>
+                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">Shift + ?</kbd>
               </div>
             </div>
           </div>
