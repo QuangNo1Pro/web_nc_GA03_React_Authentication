@@ -133,23 +133,8 @@ export class MailService {
       if (email) {
         email.starred = starred;
         
-        // Cập nhật số lượng starred trong mailbox
-        const starredBox = this.mailboxes.find(mb => mb.id === 'starred');
-        if (starredBox) {
-          // Cập nhật count (tổng số email starred, bất kể đã đọc hay chưa)
-          if (starred) {
-            starredBox.count = (starredBox.count || 0) + 1;
-          } else if ((starredBox.count || 0) > 0) {
-            starredBox.count = (starredBox.count || 0) - 1;
-          }
-          
-          // Cập nhật unread count (chỉ tính email chưa đọc)
-          if (starred && !email.read) {
-            starredBox.unread += 1;
-          } else if (!starred && !email.read && starredBox.unread > 0) {
-            starredBox.unread -= 1;
-          }
-        }
+        // Gọi recalculateCounts để đảm bảo counts chính xác
+        this.recalculateCounts();
         return { success: true, email };
       }
       return { success: false };
@@ -169,40 +154,10 @@ export class MailService {
       }
       
       if (email) {
-        const wasUnread = !email.read; // Trạng thái cũ
-        
-        // Nếu email thuộc inbox, cập nhật số lượng unread
-        const inboxBox = this.mailboxes.find(mb => mb.id === 'inbox');
-        const inboxEmail = (this.emails.inbox || []).find(e => e.id === emailId);
-        if (inboxEmail && inboxBox) {
-          if (wasUnread && read) {
-            // Từ chưa đọc → đã đọc: -1
-            if (inboxBox.unread > 0) {
-              inboxBox.unread -= 1;
-            }
-          } else if (!wasUnread && !read) {
-            // Từ đã đọc → chưa đọc: +1
-            inboxBox.unread += 1;
-          }
-        }
-        
-        // Cập nhật starredBox.unread nếu email có starred
-        if (email.starred) {
-          const starredBox = this.mailboxes.find(mb => mb.id === 'starred');
-          if (starredBox) {
-            if (wasUnread && read) {
-              // Từ chưa đọc → đã đọc: -1
-              if (starredBox.unread > 0) {
-                starredBox.unread -= 1;
-              }
-            } else if (!wasUnread && !read) {
-              // Từ đã đọc → chưa đọc: +1
-              starredBox.unread += 1;
-            }
-          }
-        }
-        
         email.read = read;
+        
+        // Gọi recalculateCounts để đảm bảo counts chính xác
+        this.recalculateCounts();
         return { success: true, email };
       }
       return { success: false };

@@ -143,6 +143,7 @@ export default function Inbox() {
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const {
     data: mailboxes,
@@ -164,7 +165,7 @@ export default function Inbox() {
   });
 
   const {
-    data: email,
+    data: emailDetail,
     isLoading: emailLoading,
     error: emailError,
   } = useQuery({
@@ -172,6 +173,14 @@ export default function Inbox() {
     queryFn: () => fetchEmail(selectedEmail!),
     enabled: !!selectedEmail,
   });
+
+  // Lấy email từ list để có read/starred state mới nhất
+  const email = selectedEmail 
+    ? { 
+        ...emailDetail, 
+        ...(emails?.find((e: any) => e.id === selectedEmail) || {})
+      }
+    : null;
 
   const handleMailboxSelect = (mailboxId: string) => {
     setSelectedMailbox(mailboxId);
@@ -202,7 +211,7 @@ export default function Inbox() {
       [emailId]: newStarred,
     }));
     
-    // Optimistic update: cập nhật cache trực tiếp để trigger re-render
+    // Optimistic update: cập nhật TẤT CẢ cache liên quan
     queryClient.setQueryData(['emails', selectedMailbox], (oldData: any) => {
       if (!oldData) return oldData;
       return oldData.map((e: any) => 
@@ -210,12 +219,24 @@ export default function Inbox() {
       );
     });
     
+    // Update cache của starred mailbox luôn
+    queryClient.setQueryData(['emails', 'starred'], (oldData: any) => {
+      if (!oldData) return oldData;
+      return oldData.map((e: any) => 
+        e.id === emailId ? { ...e, starred: newStarred } : e
+      );
+    });
+    
     try {
-      const response = await api.patch(`/mail/emails/${emailId}/star`, { starred: newStarred });
-      console.log('Star API response:', response.data);
-      // Invalidate cache để cập nhật số lượng starred
+      await api.patch(`/mail/emails/${emailId}/star`, { starred: newStarred });
+      // Invalidate TẤT CẢ để đồng bộ với backend
       queryClient.invalidateQueries({ queryKey: ['mailboxes'] });
+      queryClient.invalidateQueries({ queryKey: ['emails', selectedMailbox] });
       queryClient.invalidateQueries({ queryKey: ['emails', 'starred'] });
+      // Nếu đang xem email này ở Column 3, re-fetch để update UI
+      if (selectedEmail === emailId) {
+        queryClient.invalidateQueries({ queryKey: ['email', emailId] });
+      }
     } catch (err) {
       console.error('Star API error:', err);
       // Nếu lỗi, revert lại state và cache
@@ -240,7 +261,7 @@ export default function Inbox() {
     if (!emailObj) return;
     const newRead = !emailObj.read;
     
-    // Optimistic update: cập nhật cache trực tiếp để trigger re-render
+    // Optimistic update: cập nhật TẤT CẢ cache liên quan
     queryClient.setQueryData(['emails', selectedMailbox], (oldData: any) => {
       if (!oldData) return oldData;
       return oldData.map((e: any) => 
@@ -248,10 +269,28 @@ export default function Inbox() {
       );
     });
     
+    // Update cache của starred mailbox nếu email có starred
+    if (emailObj.starred) {
+      queryClient.setQueryData(['emails', 'starred'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((e: any) => 
+          e.id === emailId ? { ...e, read: newRead } : e
+        );
+      });
+    }
+    
     try {
       await api.patch(`/mail/emails/${emailId}/read`, { read: newRead });
-      // Invalidate cache để đồng bộ backend (backend đã tự động cập nhật count)
+      // Invalidate TẤT CẢ để đồng bộ với backend (backend đã tự động cập nhật count)
       queryClient.invalidateQueries({ queryKey: ['mailboxes'] });
+      queryClient.invalidateQueries({ queryKey: ['emails', selectedMailbox] });
+      if (emailObj.starred) {
+        queryClient.invalidateQueries({ queryKey: ['emails', 'starred'] });
+      }
+      // Nếu đang xem email này ở Column 3, re-fetch để update UI
+      if (selectedEmail === emailId) {
+        queryClient.invalidateQueries({ queryKey: ['email', emailId] });
+      }
     } catch (err) {
       // Nếu lỗi, revert lại cache
       queryClient.setQueryData(['emails', selectedMailbox], (oldData: any) => {
@@ -645,27 +684,181 @@ export default function Inbox() {
           <div>Error loading email</div>
         ) : email ? (
           <div>
-            <div className="flex justify-between items-center mb-4">
+            {/* Subject Header */}
+            <div className="mb-4 pb-3 border-b">
               <h2 className="text-xl font-semibold">{email.subject}</h2>
-              <div className="flex items-center gap-4">
-                <FiArchive className="cursor-pointer" />
-                <FiTrash2 className="cursor-pointer" />
-                <FiMoreVertical className="cursor-pointer" />
+            </div>
+            
+            {/* Action Buttons Row */}
+            <div className="mb-4 pb-3 border-b flex items-center gap-2">
+              <button 
+                onClick={() => alert('Reply functionality (Mock)')}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+              >
+                <FiSend className="transform rotate-180" />
+                Trả lời
+              </button>
+              <button 
+                onClick={() => alert('Reply All functionality (Mock)')}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+              >
+                <FiSend className="transform rotate-180" />
+                Trả lời tất cả
+              </button>
+              <button 
+                onClick={() => alert('Forward functionality (Mock)')}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+              >
+                <FiSend />
+                Chuyển tiếp
+              </button>
+              
+              <div className="ml-auto flex items-center gap-1">
+                <button 
+                  onClick={() => handleToggleRead(email.id)}
+                  className="p-2 hover:bg-gray-100 rounded"
+                  title={email.read ? "Đánh dấu chưa đọc" : "Đánh dấu đã đọc"}
+                >
+                  {email.read ? <MdMarkEmailUnread className="w-5 h-5" /> : <MdMarkEmailRead className="w-5 h-5" />}
+                </button>
+                <button 
+                  onClick={() => handleToggleStar(email.id)}
+                  className="p-2 hover:bg-gray-100 rounded"
+                  title={starredState[email.id] ? "Bỏ gắn sao" : "Gắn sao"}
+                >
+                  <FiStar className={`w-5 h-5 ${starredState[email.id] ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                </button>
+                
+                {/* More Menu with Delete */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    className="p-2 hover:bg-gray-100 rounded" 
+                    title="Thêm"
+                  >
+                    <FiMoreVertical className="w-5 h-5" />
+                  </button>
+                  
+                  {showMoreMenu && (
+                    <>
+                      {/* Overlay để đóng menu khi click bên ngoài */}
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setShowMoreMenu(false)}
+                      ></div>
+                      
+                      {/* Dropdown Menu */}
+                      <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-lg z-20">
+                        <button
+                          onClick={async () => {
+                            setShowMoreMenu(false);
+                            if (confirm('Bạn có chắc muốn xóa email này?')) {
+                              try {
+                                await api.delete('/mail/emails', { 
+                                  data: { ids: [email.id] } 
+                                });
+                                
+                                // Invalidate tất cả queries để refresh
+                                queryClient.invalidateQueries({ queryKey: ['mailboxes'] });
+                                queryClient.invalidateQueries({ queryKey: ['emails', selectedMailbox] });
+                                queryClient.invalidateQueries({ queryKey: ['emails', 'starred'] });
+                                
+                                // Đóng email detail
+                                setSelectedEmail(null);
+                                alert('Đã xóa email thành công!');
+                              } catch (error) {
+                                console.error('Delete error:', error);
+                                alert('Lỗi khi xóa email!');
+                              }
+                            }
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-red-600"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                          Xóa
+                        </button>
+                        <button
+                          onClick={() => {
+                            alert('Hành động trả lời khác (Mock)');
+                            setShowMoreMenu(false);
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                          <FiArchive className="w-4 h-4" />
+                          Lưu trữ
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="flex items-center mb-4">
-              <div className="w-10 h-10 rounded-full bg-gray-300 flex-shrink-0 mr-3 flex items-center justify-center font-bold text-white">
-                {email.from.charAt(0)}
-              </div>
-              <div>
-                <div className="font-semibold">{email.from}</div>
-                <div className="text-sm text-gray-500">To: {email.to}</div>
+            
+            {/* Email metadata */}
+            <div className="mb-4 p-4 bg-gray-50 rounded">
+              <div className="flex items-start mb-3">
+                <div className="w-10 h-10 rounded-full bg-gray-300 flex-shrink-0 mr-3 flex items-center justify-center font-bold text-white">
+                  {email.from.charAt(0)}
+                </div>
+                <div className="flex-grow">
+                  <div className="font-semibold text-base">{email.from}</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    <span className="font-medium">To:</span> {email.to}
+                  </div>
+                  {email.cc && (
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium">Cc:</span> {email.cc}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-500 mt-2">
+                    {new Date(email.received).toLocaleString('vi-VN', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Email body */}
             <div
-              className="prose max-w-none"
+              className="prose max-w-none mb-4"
               dangerouslySetInnerHTML={{ __html: email.body }}
             />
+
+            {/* Attachments */}
+            {email.attachments && email.attachments.length > 0 && (
+              <div className="mt-4 p-4 bg-gray-50 rounded">
+                <h3 className="text-sm font-semibold mb-2">
+                  Attachments ({email.attachments.length})
+                </h3>
+                <div className="space-y-2">
+                  {email.attachments.map((attachment: any, index: number) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-white border rounded hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FiFileText className="text-gray-500" size={20} />
+                        <div>
+                          <div className="text-sm font-medium">{attachment.name}</div>
+                          <div className="text-xs text-gray-500">{attachment.size}</div>
+                        </div>
+                      </div>
+                      <button
+                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                        onClick={() => alert(`Download ${attachment.name}`)}
+                      >
+                        Download
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
