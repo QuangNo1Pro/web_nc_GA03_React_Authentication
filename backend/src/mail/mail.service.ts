@@ -8,7 +8,7 @@ export class MailService {
     { id: 'starred', name: 'Starred', unread: 4, count: 4 }, // count = tổng số email starred, unread = số email starred chưa đọc
     { id: 'sent', name: 'Sent', unread: 0 },
     { id: 'drafts', name: 'Drafts', unread: 1 },
-    { id: 'archive', name: 'Archive', unread: 0 },
+    { id: 'archive', name: 'Archive', unread: 0 }, // unread = số emails chưa đọc trong archive
     { id: 'trash', name: 'Trash', unread: 0 },
     { id: 'spam', name: 'Spam', unread: 12 },
     { id: 'custom1', name: 'Custom Folder 1', unread: 0 },
@@ -314,22 +314,64 @@ export class MailService {
     return this.emailDetails[emailId] || null;
   }
 
-  // Bulk delete emails
+  // Bulk delete emails - soft delete (move to trash) or hard delete (permanent from trash)
   deleteEmails(ids: string[]) {
     const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'archive', 'trash'];
     let deletedCount = 0;
+    let movedToTrashCount = 0;
 
+    // Tìm emails trong trash - xóa vĩnh viễn
+    const trashEmails = (this.emails.trash || []).filter(e => ids.includes(e.id));
+    if (trashEmails.length > 0) {
+      const trashIds = trashEmails.map(e => e.id);
+      const initialLength = this.emails.trash.length;
+      this.emails.trash = this.emails.trash.filter(e => !trashIds.includes(e.id));
+      deletedCount = initialLength - this.emails.trash.length;
+      
+      // Xóa email details
+      trashIds.forEach(id => {
+        if (this.emailDetails[id]) {
+          delete this.emailDetails[id];
+        }
+      });
+    }
+
+    // Tìm emails ở các mailbox khác - chuyển vào trash (soft delete)
+    const emailsToMove: any[] = [];
     for (const key of mailboxKeys) {
-      if (this.emails[key]) {
-        const initialLength = this.emails[key].length;
-        this.emails[key] = this.emails[key].filter(e => !ids.includes(e.id));
-        deletedCount += initialLength - this.emails[key].length;
+      if (key !== 'trash' && this.emails[key]) {
+        const foundEmails = this.emails[key].filter(e => ids.includes(e.id));
+        if (foundEmails.length > 0) {
+          emailsToMove.push(...foundEmails);
+          // Xóa khỏi mailbox gốc
+          this.emails[key] = this.emails[key].filter(e => !ids.includes(e.id));
+        }
       }
+    }
+
+    // Chuyển emails sang trash
+    if (emailsToMove.length > 0) {
+      if (!this.emails.trash) {
+        this.emails.trash = [];
+      }
+      this.emails.trash.unshift(...emailsToMove);
+      movedToTrashCount = emailsToMove.length;
     }
 
     // Cập nhật counts
     this.recalculateCounts();
-    return { success: true, deletedCount };
+    
+    // Cập nhật trash unread count
+    const trashBox = this.mailboxes.find(mb => mb.id === 'trash');
+    if (trashBox) {
+      trashBox.unread = (this.emails.trash || []).filter(e => !e.read).length;
+    }
+
+    return { 
+      success: true, 
+      deletedCount, // số emails xóa vĩnh viễn
+      movedToTrashCount, // số emails chuyển vào trash
+    };
   }
 
   // Bulk mark read/unread
@@ -385,10 +427,93 @@ export class MailService {
     return { success: true, email: newEmail };
   }
 
+  // Archive email - di chuyển email từ mailbox hiện tại sang archive
+  archiveEmail(emailId: string) {
+    const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'trash'];
+    let archivedEmail: any = null;
+
+    // Tìm và xóa email từ mailbox gốc
+    for (const key of mailboxKeys) {
+      if (this.emails[key]) {
+        const emailIndex = this.emails[key].findIndex(e => e.id === emailId);
+        if (emailIndex !== -1) {
+          archivedEmail = this.emails[key].splice(emailIndex, 1)[0];
+          break;
+        }
+      }
+    }
+
+    if (archivedEmail) {
+      // Thêm vào archive
+      if (!this.emails.archive) {
+        this.emails.archive = [];
+      }
+      this.emails.archive.unshift(archivedEmail);
+
+      // Cập nhật counts
+      this.recalculateCounts();
+      
+      // Cập nhật archive mailbox unread count
+      const archiveBox = this.mailboxes.find(mb => mb.id === 'archive');
+      if (archiveBox) {
+        archiveBox.unread = (this.emails.archive || []).filter(e => !e.read).length;
+      }
+
+      return { success: true, message: 'Email archived successfully' };
+    }
+
+    return { success: false, message: 'Email not found' };
+  }
+
+  // Move email - di chuyển email từ mailbox hiện tại sang mailbox khác
+  moveEmail(emailId: string, targetMailbox: string) {
+    const mailboxKeys = ['inbox', 'sent', 'spam', 'drafts', 'trash', 'archive'];
+    let movedEmail: any = null;
+    let sourceMailbox: string = '';
+
+    // Tìm và xóa email từ mailbox gốc
+    for (const key of mailboxKeys) {
+      if (this.emails[key]) {
+        const emailIndex = this.emails[key].findIndex(e => e.id === emailId);
+        if (emailIndex !== -1) {
+          movedEmail = this.emails[key].splice(emailIndex, 1)[0];
+          sourceMailbox = key;
+          break;
+        }
+      }
+    }
+
+    if (movedEmail) {
+      // Thêm vào target mailbox
+      if (!this.emails[targetMailbox]) {
+        this.emails[targetMailbox] = [];
+      }
+      this.emails[targetMailbox].unshift(movedEmail);
+
+      // Cập nhật counts
+      this.recalculateCounts();
+      
+      // Cập nhật unread count cho target mailbox
+      const targetBox = this.mailboxes.find(mb => mb.id === targetMailbox);
+      if (targetBox) {
+        targetBox.unread = (this.emails[targetMailbox] || []).filter(e => !e.read).length;
+      }
+
+      return { 
+        success: true, 
+        message: `Email moved from ${sourceMailbox} to ${targetMailbox} successfully` 
+      };
+    }
+
+    return { success: false, message: 'Email not found' };
+  }
+
   // Helper: recalculate unread counts
   private recalculateCounts() {
     const inboxBox = this.mailboxes.find(mb => mb.id === 'inbox');
     const starredBox = this.mailboxes.find(mb => mb.id === 'starred');
+    const archiveBox = this.mailboxes.find(mb => mb.id === 'archive');
+    const trashBox = this.mailboxes.find(mb => mb.id === 'trash');
 
     if (inboxBox) {
       inboxBox.unread = (this.emails.inbox || []).filter(e => !e.read).length;
@@ -406,6 +531,14 @@ export class MailService {
       const starredEmails = allEmails.filter(e => e.starred);
       starredBox.count = starredEmails.length;
       starredBox.unread = starredEmails.filter(e => !e.read).length;
+    }
+
+    if (archiveBox) {
+      archiveBox.unread = (this.emails.archive || []).filter(e => !e.read).length;
+    }
+
+    if (trashBox) {
+      trashBox.unread = (this.emails.trash || []).filter(e => !e.read).length;
     }
   }
 }

@@ -51,4 +51,16 @@ export class MailController {
   sendEmail(@Body() emailData: { to: string; subject: string; body: string }) {
     return this.mailService.sendEmail(emailData);
   }
+
+  // PATCH /mail/emails/:id/archive - archive email
+  @Patch('emails/:id/archive')
+  archiveEmail(@Param('id') id: string) {
+    return this.mailService.archiveEmail(id);
+  }
+
+  // PATCH /mail/emails/:id/move - move email to another mailbox
+  @Patch('emails/:id/move')
+  moveEmail(@Param('id') id: string, @Body('targetMailbox') targetMailbox: string) {
+    return this.mailService.moveEmail(id, targetMailbox);
+  }
 }
