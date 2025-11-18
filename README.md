@@ -103,23 +103,12 @@ This is a full-stack application that implements secure authentication using ema
 -   **Vercel:** For hosting the frontend application.
 -   **Render:** For hosting the backend application.
 
-## Screenshots
+## Github
 
-### Login Page
-
-![Login Page](placeholder.png)
-
-### Register Page
-
-![Register Page](placeholder.png)
-
-### Email Dashboard
-
-![Email Dashboard](placeholder.png)
+- **Guthub:** [https://github.com/QuangNo1Pro/web_nc_GA03_React_Authentication.git](https://github.com/QuangNo1Pro/web_nc_GA03_React_Authentication.git)
 
 ## Deployment
-
 The application is deployed and publicly accessible at the following URLs:
 
--   **Frontend (Vercel):** [https://ga03-react-authentication.vercel.app/](https://ga03-react-authentication.vercel.app/)
--   **Backend (Render):** [https://ga03-react-authentication.onrender.com/](https://ga03-react-authentication.onrender.com/)
+-   **Frontend (Vercel):** [https://web-nc-ga-03-react-authentication.vercel.app/](https://web-nc-ga-03-react-authentication.vercel.app/)
+-   **Backend (Render):** [https://web-nc-ga03-react-authentication.onrender.com](https://web-nc-ga03-react-authentication.onrender.com)
