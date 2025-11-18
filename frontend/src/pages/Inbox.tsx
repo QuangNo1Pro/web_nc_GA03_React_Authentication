@@ -697,7 +697,8 @@ export default function Inbox() {
         bcc: composeBcc,
         subject: composeSubject,
         body: composeBody,
-        attachments: composeAttachments.map(f => f.name) // Chỉ gửi tên file (demo)
+        // Send attachments as objects with name and size (bytes)
+        attachments: composeAttachments.map(f => ({ name: f.name, size: f.size }))
       });
       
       // Reset form và đóng modal

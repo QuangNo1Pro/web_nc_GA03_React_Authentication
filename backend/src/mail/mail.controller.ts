@@ -48,7 +48,7 @@ export class MailController {
 
   // POST /mail/send - send email
   @Post('send')
-  sendEmail(@Body() emailData: { to: string; subject: string; body: string }) {
+  sendEmail(@Body() emailData: { to: string; subject: string; body: string; attachments?: { name: string; size: number }[] }) {
     return this.mailService.sendEmail(emailData);
   }
 

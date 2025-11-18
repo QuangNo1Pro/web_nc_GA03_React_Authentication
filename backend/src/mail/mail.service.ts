@@ -396,7 +396,7 @@ export class MailService {
   }
 
   // Send email
-  sendEmail(emailData: { to: string; subject: string; body: string }) {
+  sendEmail(emailData: { to: string; subject: string; body: string; attachments?: { name: string; size: number }[] }) {
     const newEmail = {
       id: String(Date.now()),
       sender: 'Me',
@@ -413,6 +413,28 @@ export class MailService {
     }
     this.emails.sent.unshift(newEmail);
 
+    // Helper to format bytes to human readable string
+    const formatBytes = (bytes: number) => {
+      if (!bytes && bytes !== 0) return '';
+      const thresh = 1024;
+      if (Math.abs(bytes) < thresh) {
+        return bytes + ' B';
+      }
+      const units = ['KB', 'MB', 'GB', 'TB'];
+      let u = -1;
+      do {
+        bytes /= thresh;
+        ++u;
+      } while (Math.abs(bytes) >= thresh && u < units.length - 1);
+      return bytes.toFixed( (bytes >= 10 || u === 0) ? 0 : 1 ) + ' ' + units[u];
+    };
+
+    // Format attachments if provided
+    const formattedAttachments = (emailData.attachments || []).map(a => ({
+      name: a.name,
+      size: formatBytes(a.size),
+    }));
+
     // Thêm email detail
     this.emailDetails[newEmail.id] = {
       from: 'Me <me@example.com>',
@@ -421,7 +443,7 @@ export class MailService {
       subject: emailData.subject,
       received: newEmail.timestamp,
       body: emailData.body,
-      attachments: [],
+      attachments: formattedAttachments,
     };
 
     return { success: true, email: newEmail };
