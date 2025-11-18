@@ -416,7 +416,7 @@ export class MailService {
   }
 
   // Send email
-  sendEmail(emailData: { to: string; subject: string; body: string; attachments?: { name: string; size: number }[] }) {
+  sendEmail(emailData: { to: string; cc?: string; bcc?: string; subject: string; body: string; attachments?: { name: string; size: number }[] }) {
     const newEmail = {
       id: String(Date.now()),
       sender: 'Me',
@@ -459,7 +459,8 @@ export class MailService {
     this.emailDetails[newEmail.id] = {
       from: 'Me <me@example.com>',
       to: emailData.to,
-      cc: '',
+      cc: emailData.cc || '',
+      bcc: emailData.bcc || '',
       subject: emailData.subject,
       received: newEmail.timestamp,
       body: emailData.body,

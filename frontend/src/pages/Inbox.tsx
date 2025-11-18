@@ -272,10 +272,21 @@ export default function Inbox() {
 
   // Lấy email từ list để có read/starred state mới nhất
   const email = selectedEmail 
-    ? { 
-        ...emailDetail, 
-        ...(emails?.find((e: any) => e.id === selectedEmail) || {})
-      }
+    ? (() => {
+        const listEmail = emails?.find((e: any) => e.id === selectedEmail);
+        if (!listEmail && !emailDetail) return null;
+        
+        // Ưu tiên read/starred từ list (đã được update optimistically)
+        return {
+          ...emailDetail,
+          ...listEmail,
+          // Giữ lại body/attachments/cc từ detail (list không có)
+          body: emailDetail?.body || listEmail?.body || '',
+          attachments: emailDetail?.attachments || listEmail?.attachments || [],
+          cc: emailDetail?.cc || listEmail?.cc || '',
+          bcc: emailDetail?.bcc || listEmail?.bcc || '',
+        };
+      })()
     : null;
 
   const handleMailboxSelect = (mailboxId: string) => {
@@ -1311,6 +1322,11 @@ export default function Inbox() {
                       {email.cc && (
                         <div className="text-sm text-gray-600">
                           <span className="font-medium">Cc:</span> {email.cc}
+                        </div>
+                      )}
+                      {email.bcc && (
+                        <div className="text-sm text-gray-600">
+                          <span className="font-medium">Bcc:</span> {email.bcc}
                         </div>
                       )}
                       <div className="text-xs text-gray-500 mt-2">
