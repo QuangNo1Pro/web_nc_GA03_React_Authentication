@@ -683,6 +683,59 @@ export default function Inbox() {
     queryClient.invalidateQueries({ queryKey: ['mailboxes'] });
   };
 
+  // Hàm Reply - trả lời email
+  const handleReply = () => {
+    if (!email) return;
+    
+    // Mở compose modal với To = sender của email gốc
+    setComposeTo(email.from);
+    setComposeSubject(`Re: ${email.subject.replace(/^Re:\s*/i, '')}`);
+    setComposeBody(''); // Để trống cho user tự gõ
+    setShowComposeModal(true);
+  };
+
+  // Hàm Reply All - trả lời tất cả
+  const handleReplyAll = () => {
+    if (!email) return;
+    
+    // To = người gửi gốc + tất cả người nhận khác (trừ mình - "Me <me@example.com>")
+    const allRecipients = [email.from];
+    
+    // Thêm tất cả người trong To (trừ mình)
+    if (email.to) {
+      const toList = email.to.split(',').map((e: string) => e.trim());
+      // Loại bỏ email của mình (Me <me@example.com> hoặc me@example.com)
+      const otherRecipients = toList.filter((e: string) => 
+        !e.toLowerCase().includes('me@example.com') && 
+        !e.toLowerCase().startsWith('me <')
+      );
+      allRecipients.push(...otherRecipients);
+    }
+    
+    setComposeTo(allRecipients.join(', '));
+    
+    // Giữ lại Cc từ email gốc
+    if (email.cc) {
+      setComposeCc(email.cc);
+      setShowCc(true);
+    }
+    
+    setComposeSubject(`Re: ${email.subject.replace(/^Re:\s*/i, '')}`);
+    setComposeBody(''); // Để trống cho user tự gõ
+    setShowComposeModal(true);
+  };
+
+  // Hàm Forward - chuyển tiếp email
+  const handleForward = () => {
+    if (!email) return;
+    
+    // Clear To (user needs to fill), keep subject with Fwd:, include original content
+    setComposeTo('');
+    setComposeSubject(`Fwd: ${email.subject.replace(/^Fwd:\s*/i, '')}`);
+    setComposeBody(`\n\n--- Forwarded message ---\nFrom: ${email.from}\nDate: ${new Date(email.received).toLocaleString('vi-VN')}\nSubject: ${email.subject}\nTo: ${email.to}\n\n${email.body.replace(/<[^>]*>/g, '')}`);
+    setShowComposeModal(true);
+  };
+
   // Hàm gửi email
   const handleSendEmail = async () => {
     if (!composeTo || !composeSubject || !composeBody) {
@@ -890,7 +943,7 @@ export default function Inbox() {
           {/* Reply, Reply All, Forward buttons - chỉ enabled khi chọn đúng 1 email */}
           <button
             className="p-2 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => alert('Reply functionality (Mock)')}
+            onClick={handleReply}
             disabled={!((selectedEmail && selectedEmails.size === 0) || selectedEmails.size === 1)}
             title="Trả lời"
             onMouseEnter={() => setIsReplyHovered(true)}
@@ -900,7 +953,7 @@ export default function Inbox() {
           </button>
           <button
             className="p-2 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => alert('Reply All functionality (Mock)')}
+            onClick={handleReplyAll}
             disabled={!((selectedEmail && selectedEmails.size === 0) || selectedEmails.size === 1)}
             title="Trả lời tất cả"
             onMouseEnter={() => setIsReplyAllHovered(true)}
@@ -910,7 +963,7 @@ export default function Inbox() {
           </button>
           <button
             className="p-2 hover:bg-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => alert('Forward functionality (Mock)')}
+            onClick={handleForward}
             disabled={!((selectedEmail && selectedEmails.size === 0) || selectedEmails.size === 1)}
             title="Chuyển tiếp"
             onMouseEnter={() => setIsForwardHovered(true)}
@@ -1281,7 +1334,7 @@ export default function Inbox() {
                   {/* Right side: Action buttons */}
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button 
-                      onClick={() => alert('Reply functionality (Mock)')}
+                      onClick={handleReply}
                       className="p-2 hover:bg-gray-100 rounded"
                       title="Trả lời"
                       onMouseEnter={() => setIsReplyHoveredDetail(true)}
@@ -1290,7 +1343,7 @@ export default function Inbox() {
                       <ArrowReply20Regular className={isReplyHoveredDetail ? "text-blue-600" : "text-gray-600"} />
                     </button>
                     <button 
-                      onClick={() => alert('Reply All functionality (Mock)')}
+                      onClick={handleReplyAll}
                       className="p-2 hover:bg-gray-100 rounded"
                       title="Trả lời tất cả"
                       onMouseEnter={() => setIsReplyAllHoveredDetail(true)}
@@ -1299,7 +1352,7 @@ export default function Inbox() {
                       <ArrowReplyAll20Regular className={isReplyAllHoveredDetail ? "text-blue-600" : "text-gray-600"} />
                     </button>
                     <button 
-                      onClick={() => alert('Forward functionality (Mock)')}
+                      onClick={handleForward}
                       className="p-2 hover:bg-gray-100 rounded"
                       title="Chuyển tiếp"
                       onMouseEnter={() => setIsForwardHoveredDetail(true)}

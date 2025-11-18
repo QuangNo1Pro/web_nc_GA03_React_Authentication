@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class MailService {
   private readonly mailboxes = [
-    { id: 'inbox', name: 'Inbox', unread: 7 },
+    { id: 'inbox', name: 'Inbox', unread: 8 },
     { id: 'starred', name: 'Starred', unread: 4, count: 4 }, // count = tổng số email starred, unread = số email starred chưa đọc
     { id: 'sent', name: 'Sent', unread: 0 },
     { id: 'drafts', name: 'Drafts', unread: 1 },
@@ -95,6 +95,15 @@ export class MailService {
         subject: 'Client Feedback Summary',
         preview: 'Overall satisfaction rate: 92%. Great job on the recent project delivery!',
         timestamp: '2025-11-15T18:00:00Z',
+        starred: false,
+        read: false,
+      },
+      {
+        id: '11',
+        sender: 'Team Lead',
+        subject: 'Project Update - Multiple Recipients',
+        preview: 'Quick update on the project status with the entire team',
+        timestamp: '2025-11-16T09:00:00Z',
         starred: false,
         read: false,
       },
@@ -265,6 +274,17 @@ export class MailService {
       attachments: [
         { name: 'feedback-summary.pdf', size: '1.1 MB' },
         { name: 'survey-results.xlsx', size: '780 KB' },
+      ],
+    },
+    '11': {
+      from: 'Team Lead <lead@company.com>',
+      to: 'Me <me@example.com>, Alice <alice@company.com>, Bob <bob@company.com>, Charlie <charlie@company.com>',
+      cc: 'Manager <manager@company.com>, HR <hr@company.com>',
+      subject: 'Project Update - Multiple Recipients',
+      received: '2025-11-16T09:00:00Z',
+      body: '<h3>Project Status Update</h3><p>Hi team,</p><p>Here is a quick update on our current project status. We are on track to meet the deadline.</p><p>Key points:</p><ul><li>Phase 1 completed</li><li>Phase 2 in progress</li><li>Testing scheduled for next week</li></ul><p>Please let me know if you have any questions.</p><p>Best regards,<br>Team Lead</p>',
+      attachments: [
+        { name: 'project-timeline.pdf', size: '650 KB' },
       ],
     },
   };
